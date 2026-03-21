@@ -1,0 +1,14 @@
+venv/
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+
+data/raw/
+data/processed/
+
+*.ckpt
+*.csv
+
+.env
+.DS_Store
