@@ -1,168 +1,183 @@
 # 🚀 Enterprise Retail Intelligence Platform
 
-An end-to-end AI system that combines **demand forecasting**, **deep learning recommendations**, **ranking optimization**, and a **business copilot** to power intelligent retail decision-making.
+An end-to-end AI system that combines **recommendation systems**, **demand forecasting**, **ranking optimization**, and a **learning feedback loop** to power intelligent retail decision-making.
 
 ---
 
-## 🧠 Overview
+# 🧠 Overview
 
-Modern retail systems struggle to align **what users want** with **what should be stocked**.
+Modern retail systems struggle to align:
 
-This platform solves that by integrating:
+* What users **want** (personalization)
+* What businesses should **stock** (demand)
 
-* 📈 Demand Forecasting (TFT)
-* 🎯 Personalized Recommendations (Two-Tower Model)
-* ⚖️ Hybrid Ranking (Affinity + Demand)
-* 🔁 Feedback-driven Optimization (A/B Testing)
-* 🤖 Business Copilot (Decision Intelligence)
-* 📊 Executive Dashboard (Streamlit)
-* ⚡ Real-time Serving (FastAPI)
+This project solves that by integrating:
 
----
-
-## 🏗️ System Architecture
-
-```
-Raw Data
-   ↓
-Preprocessing
-   ↓
-Forecasting Engine (TFT)
-   ↓
-Candidate Generation (Collaborative Filtering)
-   ↓
-Ranking Model (Two-Tower)
-   ↓
-Hybrid Scoring (Affinity + Demand)
-   ↓
-Serving API (FastAPI)
-   ↓
-Dashboard (Streamlit)
-   ↓
-Business Copilot
+```text
+User Behavior + Demand Forecasting + Ranking Optimization
 ```
 
 ---
 
-## 🔑 Key Features
+# ⚙️ System Architecture
 
-### 📈 Demand Forecasting
+```text
+                ┌──────────────────────┐
+                │  User Interactions   │
+                │ (view/click/buy)     │
+                └─────────┬────────────┘
+                          ↓
+                ┌──────────────────────┐
+                │   Feedback Logger    │
+                └─────────┬────────────┘
+                          ↓
+        ┌──────────────────────────────────┐
+        │                                  │
+        ↓                                  ↓
+┌──────────────────┐              ┌────────────────────┐
+│ Recommendation   │              │ Demand Forecasting │
+│ (Two-Tower DL)   │              │ (TFT Model)        │
+└────────┬─────────┘              └────────┬───────────┘
+         ↓                                 ↓
+         └──────────────┬──────────────────┘
+                        ↓
+              ┌──────────────────────┐
+              │ Ranking Engine      │
+              │ (Weighted Scoring)  │
+              └─────────┬────────────┘
+                        ↓
+              ┌──────────────────────┐
+              │ API (FastAPI)        │
+              └─────────┬────────────┘
+                        ↓
+              ┌──────────────────────┐
+              │ React Dashboard      │
+              └──────────────────────┘
+                        ↓
+              ┌──────────────────────┐
+              │ Learning Pipeline    │
+              │ (BPR / Regression)   │
+              └──────────────────────┘
+```
+
+---
+
+# 🔑 Key Features
+
+## 🧠 1. Deep Learning Recommendations
+
+* Two-Tower Neural Network (PyTorch)
+* Learns user-product affinity
+* Generates personalized recommendations
+
+---
+
+## 📈 2. Demand Forecasting
 
 * Temporal Fusion Transformer (TFT)
-* Multi-step time-series prediction
-* Handles real-world sparse retail demand
+* Predicts product demand
+* Enables stock planning
 
 ---
 
-### 🎯 Recommendation System
+## ⚖️ 3. Hybrid Ranking Engine
 
-* Collaborative Filtering (candidate generation)
-* Two-Tower Deep Learning Model
-* Learns user-product embeddings
+Combines:
 
----
-
-### ⚖️ Hybrid Ranking Engine
-
-* Combines:
-
-  * User affinity (ML model)
-  * Forecasted demand (time-series)
-* Config-driven weights (auto-optimized)
-
----
-
-### 🔁 Optimization Loop
-
-* Feedback logging (views, clicks, purchases)
-* A/B testing engine
-* Automatic ranking weight tuning
-
----
-
-### 🤖 Business Copilot
-
-Answer business questions like:
-
-* Top demand products next week
-* Which items need restocking
-* High affinity + high demand products
-* Over-recommended products
-
----
-
-### 📊 Executive Dashboard
-
-* Demand visualization
-* Recommendation insights
-* Experiment tracking
-* Fusion analytics (Demand vs Affinity)
-
----
-
-### ⚡ Real-Time API
-
-* FastAPI-based serving
-* Loads latest model artifacts
-* Supports real-time recommendations
-
----
-
-## 📂 Project Structure
-
+```text
+Final Score = w1 * affinity_score + w2 * forecast_norm
 ```
-enterprise-retail-intelligence-platform/
 
+* Dynamic weights (learned from data)
+* Handles missing forecast gracefully
+
+---
+
+## 🔁 4. Feedback Learning Loop
+
+Tracks:
+
+* 👁 Views
+* 🖱 Clicks
+* 🛒 Purchases
+
+Used for:
+
+* A/B testing
+* Weight optimization
+* Model improvement
+
+---
+
+## 🧪 5. Real A/B Testing
+
+* Users split deterministically (A / B)
+* Different ranking strategies tested
+* Performance measured via:
+
+  * CTR (Click-through rate)
+  * Conversion rate
+
+---
+
+## 🤖 6. Ranking Optimization (Advanced)
+
+### ✅ Regression-based learning
+
+* Learns optimal weights automatically
+
+### 🔥 BPR (Bayesian Personalized Ranking)
+
+* Learns ranking instead of scores
+* Uses (user, positive, negative) pairs
+* Industry-standard approach
+
+---
+
+# 🗂 Project Structure
+
+```bash
+enterprise-retail-ai/
+│
 ├── data/
-│   ├── raw/
-│   └── processed/
-
-├── forecasting/
+│   ├── processed/
+│   ├── feedback/
+│   ├── metrics/
+│   └── experiments/
+│
 ├── recommender/
+│   └── two_tower_model.py
+│
 ├── serving/
-├── intelligence/
-├── dashboard/
-├── copilot/
+│   └── api.py
+│
+├── scripts/
+│   ├── generate_global_recs.py
+│   ├── ab_testing.py
+│   ├── feedback_metrics.py
+│   ├── ranking_optimization.py
+│   └── train_bpr.py
+│
 ├── config/
-
-├── requirements.txt
-├── Dockerfile
+│   └── ranking_weights.csv
+│
+├── frontend/
+│   └── React dashboard
+│
 └── README.md
 ```
 
 ---
 
-## ⚙️ Tech Stack
+# 🚀 Getting Started
 
-* **Python**
-* **PyTorch** (Deep Learning)
-* **PyTorch Forecasting (TFT)**
-* **FastAPI** (Serving)
-* **Streamlit** (Dashboard)
-* **Pandas / NumPy**
-
----
-
-## 🚀 Getting Started
-
-### 1️⃣ Clone Repo
-
-```bash
-git clone https://github.com/your-username/enterprise-retail-intelligence-platform.git
-cd enterprise-retail-intelligence-platform
-```
-
----
-
-### 2️⃣ Setup Environment
+## 🔧 Backend Setup
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-### 3️⃣ Run API
+Run API:
 
 ```bash
 uvicorn serving.api:app --reload
@@ -170,63 +185,172 @@ uvicorn serving.api:app --reload
 
 ---
 
-### 4️⃣ Run Dashboard
+## 💻 Frontend Setup
 
 ```bash
-streamlit run dashboard/app.py
+cd frontend
+npm install
+npm start
 ```
 
 ---
 
-## 📊 Example Insights
+# 📡 API Endpoints
 
-* Demand is highly skewed (long-tail distribution)
-* Only a small % of SKUs drive majority of forecast demand
-* Hybrid ranking improves prioritization vs standalone models
+## 🔹 Get Recommendations
 
----
-
-## 🧠 Key Learnings
-
-* Handling real-world sparse retail data
-* Feature scale imbalance in hybrid models
-* Multi-stage ML system design
-* Debugging large-scale pipelines
-* Bridging forecasting with recommendation systems
-
----
-
-## 📌 Future Improvements
-
-* LLM-powered natural language copilot
-* Cloud deployment (AWS/GCP)
-* Feature store integration
-* Real-time streaming feedback (Kafka)
-* Advanced ranking signals (price, margin, inventory)
-
----
-
-## 💼 Use Cases
-
-* Inventory planning
-* Personalized marketing
-* Demand-driven recommendations
-* Supply chain optimization
-
----
-
-## 🏁 Conclusion
-
-This project demonstrates how modern AI systems evolve from:
-
-```
-Standalone Models → Integrated Intelligence Platforms
+```http
+GET /recommend?user_id=123
 ```
 
-It goes beyond predictions to enable **continuous learning and decision-making**.
+Response:
+
+```json
+{
+  "group": "A",
+  "recommendations": [
+    {
+      "product_id": "22035",
+      "final_score": 0.93
+    }
+  ]
+}
+```
 
 ---
 
-## ⭐ If You Like This Project
+## 🔹 Log Feedback
 
-Give it a star ⭐ — and feel free to connect!
+```http
+POST /feedback
+```
+
+```json
+{
+  "user_id": 123,
+  "product_id": "22035",
+  "event": "click"
+}
+```
+
+---
+
+# 🔄 Training & Optimization
+
+## Generate Recommendations
+
+```bash
+python scripts/generate_global_recs.py
+```
+
+---
+
+## Run A/B Testing
+
+```bash
+python scripts/ab_testing.py
+```
+
+---
+
+## Compute Metrics
+
+```bash
+python scripts/feedback_metrics.py
+```
+
+---
+
+## Learn Ranking Weights (Regression)
+
+```bash
+python scripts/ranking_optimization.py
+```
+
+---
+
+## Train BPR Model (Advanced)
+
+```bash
+python scripts/train_bpr.py
+```
+
+---
+
+# 🧠 Key Concepts
+
+## 🔹 Affinity Score
+
+* Learned from user behavior
+* Output of deep learning model
+
+## 🔹 Forecast Norm
+
+* Normalized demand signal
+* Computed using min-max scaling
+
+## 🔹 Final Score
+
+```text
+Final Score = affinity_weight * affinity_score
+            + forecast_weight * forecast_norm
+```
+
+---
+
+# 📊 Metrics
+
+| Metric          | Meaning                   |
+| --------------- | ------------------------- |
+| CTR             | Click-through rate        |
+| Conversion Rate | Purchases / Clicks        |
+| Engagement      | User-product interactions |
+
+---
+
+# ⚡ Performance Highlights
+
+* ⚡ Real-time recommendation API
+* 🧠 Self-improving ranking system
+* 🔁 Continuous feedback loop
+* 📊 Data-driven optimization
+
+---
+
+# 🚀 Future Improvements
+
+* 🔥 XGBoost / LightGBM ranking
+* 🧠 User-level personalization weights
+* 📊 Real-time streaming pipeline
+* 🏆 NDCG / MAP evaluation metrics
+
+---
+
+# 👨‍💻 Tech Stack
+
+* **Backend:** Python, FastAPI
+* **ML:** PyTorch, Scikit-learn
+* **Frontend:** React
+* **Data:** Pandas, NumPy
+
+---
+
+# 📌 Summary
+
+```text
+This project builds a complete intelligent retail system that:
+- Recommends products
+- Predicts demand
+- Learns from user behavior
+- Continuously improves ranking
+```
+
+---
+
+# ⭐ Key Insight
+
+```text
+Personalization + Demand + Learning Loop = Smart Retail Intelligence
+```
+
+---
