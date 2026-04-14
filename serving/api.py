@@ -1,80 +1,64 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware  # ✅ ADD THIS
 import pandas as pd
 import torch
 import torch.nn as nn
-import numpy as np
 import os
 import re
 from pydantic import BaseModel
 from datetime import datetime
-app = FastAPI()
+from functools import lru_cache
 
-data_folder = "data/processed"
-model_folder = "recommender"
 
-forecast_files = [
-f for f in os.listdir(data_folder)
-if f.startswith("forecast_tft_") and f.endswith(".csv")
-]
+# PATHS
 
-forecast_versions = []
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 
-for f in forecast_files:
-    match = re.search(r"forecast_tft_(\d+).csv", f)
-    if match:
-        forecast_versions.append(int(match.group(1)))
+data_folder = os.path.join(ROOT_DIR, "data", "processed")
+model_folder = os.path.join(ROOT_DIR, "recommender")
 
-latest_forecast_v = max(forecast_versions)
 
-forecast_path = os.path.join(
-data_folder,
-f"forecast_tft_{latest_forecast_v}.csv"
-)
+# GLOBAL OBJECTS
 
-forecast = pd.read_csv(forecast_path)
+forecast = None
+demand = None
+candidates = None
+user_map = None
+product_map = None
+model = None
+user_candidate_map = None
+global_recs = None
 
-demand = (
-forecast.groupby("product_id")[
-"forecast_qty"
-]
-.mean()
-.reset_index()
-)
 
-demand["product_id"] = demand["product_id"].astype(str)
+# LOAD GLOBAL RECOMMENDATIONS
 
-model_files = [
-f for f in os.listdir(model_folder)
-if f.startswith("two_tower_") and f.endswith(".ckpt")
-]
+def load_latest_global_recs():
+    files = [
+        f for f in os.listdir(data_folder)
+        if f.startswith("global_recommendations_")
+    ]
 
-model_versions = []
+    if not files:
+        print(" No global recommendations found")
+        return None
 
-for f in model_files:
-    match = re.search(r"two_tower_(\d+).ckpt", f)
-    if match:
-        model_versions.append(int(match.group(1)))
+    latest_v = max([
+        int(re.search(r"global_recommendations_(\d+).csv", f).group(1))
+        for f in files
+    ])
 
-latest_model_v = max(model_versions)
+    path = os.path.join(
+        data_folder,
+        f"global_recommendations_{latest_v}.csv"
+    )
 
-model_path = os.path.join(
-model_folder,
-f"two_tower_{latest_model_v}.ckpt"
-)
+    print(f" Loaded global recs v{latest_v}")
+    return pd.read_csv(path)
 
-interactions = pd.read_csv(
-"data/processed/user_product_interactions.csv"
-)
 
-candidates = pd.read_csv(
-"data/processed/cf_candidates.csv"
-)
-
-user_ids = interactions["user_id"].unique()
-product_ids = interactions["product_id"].unique()
-
-user_map = {u:i for i,u in enumerate(user_ids)}
-product_map = {p:i for i,p in enumerate(product_ids)}
+# MODEL
 
 class TwoTower(nn.Module):
     def __init__(self, n_users, n_products):
@@ -82,95 +66,212 @@ class TwoTower(nn.Module):
         self.user_emb = nn.Embedding(n_users, 64)
         self.prod_emb = nn.Embedding(n_products, 64)
 
-
     def forward(self, u, p):
         u_vec = self.user_emb(u)
         p_vec = self.prod_emb(p)
         return torch.sigmoid((u_vec * p_vec).sum(dim=1))
 
 
-model = TwoTower(
-len(user_ids),
-len(product_ids)
+# LIFESPAN
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global forecast, demand, candidates, user_map, product_map, model, user_candidate_map, global_recs
+
+    print(" Loading resources...")
+
+    forecast_files = [
+        f for f in os.listdir(data_folder)
+        if f.startswith("forecast_tft_") and f.endswith(".csv")
+    ]
+
+    latest_v = max([
+        int(re.search(r"forecast_tft_(\d+).csv", f).group(1))
+        for f in forecast_files
+    ])
+
+    forecast_path = os.path.join(data_folder, f"forecast_tft_{latest_v}.csv")
+    forecast = pd.read_csv(forecast_path)
+
+    demand = (
+        forecast.groupby("product_id")["forecast_qty"]
+        .mean()
+        .reset_index()
+    )
+    demand["product_id"] = demand["product_id"].astype(str)
+
+    candidates = pd.read_csv(os.path.join(data_folder, "cf_candidates.csv"))
+
+    user_candidate_map = {
+        uid: group["product_id"].tolist()
+        for uid, group in candidates.groupby("user_id")
+    }
+
+    user_map_df = pd.read_csv(os.path.join(data_folder, "user_map.csv"))
+    product_map_df = pd.read_csv(os.path.join(data_folder, "product_map.csv"))
+
+    user_map = dict(zip(user_map_df["user_id"], user_map_df["user_idx"]))
+    product_map = dict(zip(product_map_df["product_id"], product_map_df["product_idx"]))
+
+    model_files = [
+        f for f in os.listdir(model_folder)
+        if f.startswith("two_tower_") and f.endswith(".ckpt")
+    ]
+
+    latest_model_v = max([
+        int(re.search(r"two_tower_(\d+).ckpt", f).group(1))
+        for f in model_files
+    ])
+
+    model_path = os.path.join(model_folder, f"two_tower_{latest_model_v}.ckpt")
+
+    model = TwoTower(len(user_map), len(product_map))
+    model.load_state_dict(torch.load(model_path, map_location="cpu"))
+    model.eval()
+
+    global_recs = load_latest_global_recs()
+
+    print(" API READY")
+    yield
+
+
+# CREATE APP
+
+app = FastAPI(lifespan=lifespan)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-model.load_state_dict(
-torch.load(model_path)
-)
 
-model.eval()
+# RECOMMEND
 
-@app.get("/recommend")
-def recommend(user_id: int):
-
+@lru_cache(maxsize=1000)
+def compute_recommendations(user_id, top_k):
 
     if user_id not in user_map:
-        return {"error": "User not found"}
+        return []
 
     user_idx = user_map[user_id]
+    user_candidates = user_candidate_map.get(user_id, [])[:200]
 
-    valid_products = [
-        p for p in candidates["product_id"]
-        if p in product_map
-    ]
+    valid_products = [p for p in user_candidates if p in product_map]
 
-    candidate_idx = [
-        product_map[p]
-        for p in valid_products
-    ]
+    if not valid_products:
+        return []
 
-    user_tensor = torch.tensor(
-        [user_idx] * len(candidate_idx)
-    )
+    candidate_idx = [product_map[p] for p in valid_products]
 
-    product_tensor = torch.tensor(
-        candidate_idx
-    )
-
-    scores = model(
-        user_tensor,
-        product_tensor
-    ).detach().numpy()
+    with torch.no_grad():
+        scores = model(
+            torch.tensor([user_idx] * len(candidate_idx)),
+            torch.tensor(candidate_idx)
+        ).numpy()
 
     ranking_df = pd.DataFrame({
-        "product_id": valid_products,
+        "product_id": [str(p) for p in valid_products],
         "affinity_score": scores
     })
 
-    ranking_df["product_id"] = ranking_df["product_id"].astype(str)
-
-    final_df = ranking_df.merge(
-        demand,
-        on="product_id",
-        how="left"
-    )
-
+    final_df = ranking_df.merge(demand, on="product_id", how="left")
     final_df["forecast_qty"] = final_df["forecast_qty"].fillna(0)
 
+    denom = final_df["forecast_qty"].max() - final_df["forecast_qty"].min() + 1e-8
+   
+    # LOAD RANKING WEIGHTS
+
+    config_path = "config/ranking_weights.csv"
+
+    if os.path.exists(config_path):
+        weights = pd.read_csv(config_path).iloc[0]
+
+        affinity_w = weights["affinity_weight"]
+        forecast_w = weights["forecast_weight"]
+
+        print(f"Using learned weights → A:{affinity_w:.3f}, F:{forecast_w:.3f}")
+
+    else:
+        affinity_w = 0.7
+        forecast_w = 0.3
+
+    print("Using default weights → A:0.7, F:0.3")
     final_df["final_score"] = (
-        0.7 * final_df["affinity_score"]
-        + 0.3 * final_df["forecast_qty"]
+        affinity_w * final_df["affinity_score"] +
+        forecast_w * ((final_df["forecast_qty"] - final_df["forecast_qty"].min()) / denom)
     )
 
-    final_df = final_df.sort_values(
-        "final_score",
-        ascending=False
-    ).head(10)
+    return final_df.sort_values("final_score", ascending=False).head(top_k).to_dict(orient="records")
 
-    return final_df.to_dict(orient="records")
+@app.get("/recommend")
+def recommend(user_id: int, top_k: int = 10):
+    results = compute_recommendations(user_id, top_k)
+    return results if results else {"error": "No recommendations"}
 
-feedback_folder = "data/feedback"
+# ANALYTICS APIs
+
+@app.get("/analytics/products")
+def product_analytics():
+    if global_recs is None:
+        return {"error": "No global recommendations"}
+
+    df = global_recs.copy()
+
+    df["impact"] = df["final_score"] * df["forecast_qty"]
+
+    return {
+        "top_products": df.groupby("product_id")["final_score"].mean().nlargest(10).reset_index().to_dict("records"),
+        "top_demand": df.groupby("product_id")["forecast_qty"].mean().nlargest(10).reset_index().to_dict("records"),
+        "high_impact": df.groupby("product_id")["impact"].mean().nlargest(10).reset_index().to_dict("records")
+    }
+
+@app.get("/analytics/stock")
+def stock():
+    if global_recs is None:
+        return {"error": "No global recommendations"}
+
+    df = global_recs.copy()
+    df["impact"] = df["final_score"] * df["forecast_qty"]
+
+    stock_df = df.groupby("product_id").mean().reset_index().sort_values("impact", ascending=False).head(20)
+
+    stock_df["priority"] = pd.cut(stock_df["impact"], bins=3, labels=["LOW", "MEDIUM", "HIGH"])
+
+    return stock_df.to_dict("records")
+
+@app.get("/analytics/summary")
+def summary():
+    if global_recs is None:
+        return {"error": "No global recommendations"}
+
+    df = global_recs.copy()
+    df["impact"] = df["final_score"] * df["forecast_qty"]
+
+    return {
+        "total_products": int(df["product_id"].nunique()),
+        "avg_score": float(df["final_score"].mean()),
+        "avg_demand": float(df["forecast_qty"].mean()),
+        "avg_impact": float(df["impact"].mean())
+    }
+
+
+
+# FEEDBACK
+
+feedback_folder = os.path.join(ROOT_DIR, "data", "feedback")
 os.makedirs(feedback_folder, exist_ok=True)
 
-feedback_file = os.path.join(
-feedback_folder,
-"user_feedback.csv"
-)
+feedback_file = os.path.join(feedback_folder, "user_feedback.csv")
 
 class Feedback(BaseModel):
     user_id: int
     product_id: str
-    event: str
+    event: str  # view / click / purchase
+
 
 @app.post("/feedback")
 def log_feedback(data: Feedback):
@@ -179,22 +280,14 @@ def log_feedback(data: Feedback):
         "user_id": data.user_id,
         "product_id": data.product_id,
         "event": data.event,
-        "timestamp": datetime.now()
+        "timestamp": datetime.now().isoformat()
     }
 
-    df = pd.DataFrame([record])
-
-    if os.path.exists(feedback_file):
-        df.to_csv(
-            feedback_file,
-            mode="a",
-            header=False,
-            index=False
-        )
-    else:
-        df.to_csv(
-            feedback_file,
-            index=False
-        )
+    pd.DataFrame([record]).to_csv(
+        feedback_file,
+        mode="a" if os.path.exists(feedback_file) else "w",
+        header=not os.path.exists(feedback_file),
+        index=False
+    )
 
     return {"status": "logged"}

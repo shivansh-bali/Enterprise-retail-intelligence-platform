@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import re
 import numpy as np
+
 st.set_page_config(
 page_title="Enterprise Retail AI Dashboard",
 layout="wide"
@@ -10,15 +11,15 @@ layout="wide"
 
 st.title("Enterprise Recommendation + Forecast Intelligence")
 
+
 data_folder = "data/processed"
-metrics_folder = "data/metrics"
-exp_folder = "data/experiments"
-config_folder = "config"
+
 
 forecast_files = [
 f for f in os.listdir(data_folder)
 if f.startswith("forecast_tft_")
 ]
+
 
 forecast_versions = [
 int(f.split("_")[2].split(".")[0])
@@ -74,61 +75,92 @@ top_recs.set_index("product_id")[
 ]
 )
 
-metrics_path = f"{metrics_folder}/feedback_summary.csv"
-
-if os.path.exists(metrics_path):
 
 
-    st.header("Feedback Performance Metrics")
+import requests
 
-    metrics = pd.read_csv(metrics_path)
+if "viewed_products" not in st.session_state:
+    st.session_state.viewed_products = set()
+    
+API_URL = "http://127.0.0.1:8000"
 
-    col1, col2, col3 = st.columns(3)
+def get_recommendations(user_id):
+    try:
+        res = requests.get(
+            f"{API_URL}/recommend",
+            params={"user_id": user_id}
+        )
+        return res.json()
+    except:
+        return []
 
-    col1.metric(
-        "CTR",
-        metrics["ctr"][0]
-    )
+def log_event(user_id, product_id, event):
+    payload = {
+        "user_id": user_id,
+        "product_id": product_id,
+        "event": event
+    }
 
-    col2.metric(
-        "Conversion Rate",
-        metrics["conversion_rate"][0]
-    )
+    try:
+        requests.post(f"{API_URL}/feedback", json=payload)
+    except:
+        pass
 
-    col3.metric(
-        "Total Purchases",
-        metrics["total_purchases"][0]
-    )
+st.header("User Recommendation Interface")
+
+user_list = recommendations["user_id"].unique() if "user_id" in recommendations.columns else [10]
+
+selected_user = st.selectbox(
+    "Select User",
+    user_list
+)
+
+if st.button("Get Personalized Recommendations"):
+
+    recs = get_recommendations(selected_user)
+
+    if len(recs) == 0:
+        st.warning("No recommendations found")
+    else:
+        st.subheader(f"Top Recommendations for User {selected_user}")
+
+        for i, product in enumerate(recs):
+
+            product_id = product["product_id"]
+
+            
+            if product_id not in st.session_state.viewed_products:
+                log_event(selected_user, product_id, "view")
+                st.session_state.viewed_products.add(product_id)
+
+            col1, col2, col3 = st.columns([3, 1, 1])
+
+            with col1:
+                st.write(f"Product: {product_id}")
+                st.write(f"Score: {round(product['final_score'], 4)}")
+
+            with col2:
+                if st.button(
+                    "Click",
+                    key=f"click_{selected_user}_{product_id}_{i}"
+                ):
+                    log_event(selected_user, product_id, "click")
+                    st.success("Clicked")
+
+            with col3:
+                if st.button(
+                    "Buy",
+                    key=f"buy_{selected_user}_{product_id}_{i}"
+                ):
+                    log_event(selected_user, product_id, "purchase")
+                    st.success("Purchased")
+
+            st.markdown("---")    
 
 
-exp_path = f"{exp_folder}/ab_results.csv"
-
-if os.path.exists(exp_path):
 
 
-    st.header("A/B Experiment Results")
 
-    ab = pd.read_csv(exp_path)
-
-    st.dataframe(ab)
-
-    st.bar_chart(
-        ab.set_index("group")[
-            "conversion_rate"
-        ]
-    )
-
-
-weights_path = f"{config_folder}/ranking_weights.csv"
-
-if os.path.exists(weights_path):
-
-
-    st.header("Ranking Weight Configuration")
-
-    weights = pd.read_csv(weights_path)
-
-    st.dataframe(weights)
 
 
 st.header("Forecast vs Recommendation Fusion")
@@ -164,10 +196,12 @@ fusion["forecast_log"] = np.log1p(
 fusion["forecast_qty"]
 )
 
+fusion_sample = fusion.sample(n=2000, random_state=42)
+
 st.scatter_chart(
-fusion,
-x="forecast_log",
-y="final_score"
+    fusion_sample,
+    x="forecast_log",
+    y="final_score"
 )
 
 
@@ -273,9 +307,14 @@ if st.button("Generate Insight"):
         },
         inplace=True
         )
+        merged["forecast_norm"] = (
+        merged["forecast_qty"] - merged["forecast_qty"].min()
+        ) / (
+        merged["forecast_qty"].max() - merged["forecast_qty"].min()
+        )
+
         merged["gap"] = (
-            merged["final_score"]
-            - merged["forecast_qty"]
+        merged["final_score"] - merged["forecast_norm"]
         )
 
         result =( merged.sort_values(

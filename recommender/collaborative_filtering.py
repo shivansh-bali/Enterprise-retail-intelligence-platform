@@ -9,85 +9,66 @@ from sklearn.decomposition import TruncatedSVD
 print("Running Collaborative Filtering...")
 
 
-
-# LOAD DATA 
-
+# LOAD DATA
 
 
 orders = pd.read_csv(
-"data/raw/orders.csv",
-usecols=["order_id", "user_id"]
+    "data/raw/orders.csv",
+    usecols=["order_id", "user_id"]
 )
 
 order_products = pd.read_csv(
-"data/raw/order_products__prior.csv",
-usecols=["order_id", "product_id"]
+    "data/raw/order_products__prior.csv",
+    usecols=["order_id", "product_id"]
 )
 
 transactions = order_products.merge(
-orders,
-on="order_id"
+    orders,
+    on="order_id"
 )
 
 
-
-
-
-#  BUILD INTERACTIONS
-
+# BUILD INTERACTIONS
 
 
 user_product = (
-transactions
-.groupby(["user_id", "product_id"])
-.size()
-.reset_index(name="interaction")
+    transactions
+    .groupby(["user_id", "product_id"])
+    .size()
+    .reset_index(name="interaction")
 )
 
 
-
-
-
 # ENCODE IDS
-
 
 
 user_enc = LabelEncoder()
 prod_enc = LabelEncoder()
 
 user_product["user_id_enc"] = user_enc.fit_transform(
-user_product["user_id"].values
+    user_product["user_id"].values
 )
 
 user_product["product_id_enc"] = prod_enc.fit_transform(
-user_product["product_id"].values
+    user_product["product_id"].values
 )
-
-
-
 
 
 # BUILD SPARSE MATRIX
 
-
-
 matrix = coo_matrix(
-(
-user_product["interaction"],
-(
-user_product["user_id_enc"],
-user_product["product_id_enc"]
-)
-)
+    (
+        user_product["interaction"],
+        (
+            user_product["user_id_enc"],
+            user_product["product_id_enc"]
+        )
+    )
 )
 
 print("Sparse matrix built")
 
-# --------------------------------------------------
-
-# 5️⃣ TRAIN CF MODEL
-
-# --------------------------------------------------
+# TRAIN CF MODEL
 
 svd = TruncatedSVD(n_components=50)
 
@@ -96,55 +77,56 @@ product_emb = svd.components_.T
 
 print("CF embeddings trained")
 
-# --------------------------------------------------
 
-# 6️⃣ GENERATE CANDIDATES
+# GENERATE CANDIDATES FOR ALL USERS
 
-# --------------------------------------------------
-
-user_id = 10
-
-user_idx = user_enc.transform([user_id])[0]
-
-scores = product_emb @ user_emb[user_idx]
 
 top_k = 200
+all_candidates = []
 
-top_products_idx = np.argsort(scores)[-top_k:]
+all_user_ids = user_enc.classes_
 
-candidate_products = prod_enc.inverse_transform(
-top_products_idx
-)
+print(f"Generating candidates for {len(all_user_ids)} users...")
 
-candidates_df = pd.DataFrame({
-"product_id": candidate_products,
-"cf_score": scores[top_products_idx]
-})
+for user_id in all_user_ids:
+    user_idx = user_enc.transform([user_id])[0]
+
+    scores = product_emb @ user_emb[user_idx]
+
+    top_products_idx = np.argsort(scores)[-top_k:]
+
+    candidate_products = prod_enc.inverse_transform(top_products_idx)
+
+    user_candidates = pd.DataFrame({
+        "user_id": user_id,
+        "product_id": candidate_products,
+        "cf_score": scores[top_products_idx]
+    })
+
+    all_candidates.append(user_candidates)
+
+candidates_df = pd.concat(all_candidates, ignore_index=True)
+
+print(f"Total candidate rows: {len(candidates_df)}")
 
 
-
-# SAVE CANDIDATES
-
+# SAVE
 
 
 os.makedirs("data/processed", exist_ok=True)
 
 candidates_df.to_csv(
-"data/processed/cf_candidates.csv",
-index=False
+    "data/processed/cf_candidates.csv",
+    index=False
 )
 
-print(" Candidates saved")
-
-interactions_path = (
-"data/processed/user_product_interactions.csv"
-)
+print("Candidates saved")
 
 user_product[
-["user_id", "product_id", "interaction"]
+    ["user_id", "product_id", "interaction"]
 ].to_csv(
-interactions_path,
-index=False
+    "data/processed/user_product_interactions.csv",
+    index=False
 )
 
-print(" Interactions saved")
+print("Interactions saved")
