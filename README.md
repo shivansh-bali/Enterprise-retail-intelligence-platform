@@ -13,7 +13,7 @@ Modern retail systems struggle to align:
 
 This project solves that by integrating:
 
-```text
+```
 User Behavior + Demand Forecasting + Ranking Optimization
 ```
 
@@ -21,43 +21,8 @@ User Behavior + Demand Forecasting + Ranking Optimization
 
 # ⚙️ System Architecture
 
-```text
-                ┌──────────────────────┐
-                │  User Interactions   │
-                │ (view/click/buy)     │
-                └─────────┬────────────┘
-                          ↓
-                ┌──────────────────────┐
-                │   Feedback Logger    │
-                └─────────┬────────────┘
-                          ↓
-        ┌──────────────────────────────────┐
-        │                                  │
-        ↓                                  ↓
-┌──────────────────┐              ┌────────────────────┐
-│ Recommendation   │              │ Demand Forecasting │
-│ (Two-Tower DL)   │              │ (TFT Model)        │
-└────────┬─────────┘              └────────┬───────────┘
-         ↓                                 ↓
-         └──────────────┬──────────────────┘
-                        ↓
-              ┌──────────────────────┐
-              │ Ranking Engine      │
-              │ (Weighted Scoring)  │
-              └─────────┬────────────┘
-                        ↓
-              ┌──────────────────────┐
-              │ API (FastAPI)        │
-              └─────────┬────────────┘
-                        ↓
-              ┌──────────────────────┐
-              │ React Dashboard      │
-              └──────────────────────┘
-                        ↓
-              ┌──────────────────────┐
-              │ Learning Pipeline    │
-              │ (BPR / Regression)   │
-              └──────────────────────┘
+```
+User → Interaction → Feedback → Learning → Better Ranking
 ```
 
 ---
@@ -68,126 +33,123 @@ User Behavior + Demand Forecasting + Ranking Optimization
 
 * Two-Tower Neural Network (PyTorch)
 * Learns user-product affinity
-* Generates personalized recommendations
-
----
 
 ## 📈 2. Demand Forecasting
 
-* Temporal Fusion Transformer (TFT)
 * Predicts product demand
-* Enables stock planning
-
----
 
 ## ⚖️ 3. Hybrid Ranking Engine
 
-Combines:
-
-```text
+```
 Final Score = w1 * affinity_score + w2 * forecast_norm
 ```
 
-* Dynamic weights (learned from data)
-* Handles missing forecast gracefully
-
----
+* Weights are **learned automatically**
 
 ## 🔁 4. Feedback Learning Loop
 
 Tracks:
 
-* 👁 Views
-* 🖱 Clicks
-* 🛒 Purchases
+* Views
+* Clicks
+* Purchases
 
 Used for:
 
-* A/B testing
-* Weight optimization
-* Model improvement
+* Model learning
+* Ranking optimization
 
----
+## 🤖 5. Ranking Optimization (Core)
 
-## 🧪 5. Real A/B Testing
+### Regression-based
 
-* Users split deterministically (A / B)
-* Different ranking strategies tested
-* Performance measured via:
+* Learns weights from data
 
-  * CTR (Click-through rate)
-  * Conversion rate
+### BPR (Pairwise Ranking)
 
----
-
-## 🤖 6. Ranking Optimization (Advanced)
-
-### ✅ Regression-based learning
-
-* Learns optimal weights automatically
-
-### 🔥 BPR (Bayesian Personalized Ranking)
-
-* Learns ranking instead of scores
-* Uses (user, positive, negative) pairs
+* Learns ordering instead of scores
 * Industry-standard approach
 
 ---
 
 # 🗂 Project Structure
 
-```bash
+```
 enterprise-retail-ai/
 │
+├── app/                     
+│   ├── api.py
+│   ├── routes/
+│   │   ├── recommend.py
+│   │   └── feedback.py
+│   ├── services/
+│   │   ├── ranking.py
+│   │   └── recommendation.py
+│   └── utils/
+│       └── loaders.py
+│
+├── ml/                    
+│   ├── models/
+│   │   ├── two_tower_model.py
+│   │   └── checkpoints/
+│   │       ├── two_tower_1.ckpt
+│   │       ├── two_tower_2.ckpt
+│   │       └── two_tower_3.ckpt
+│   │
+│   ├── pipelines/
+│   │   ├── ranking_pipeline.py
+│   │   ├── generate_recs.py
+│   │   └── forecast_pipeline.py
+│   │
+│   ├── training/
+│   │   ├── train_bpr.py
+│   │   └── retrain_model.py
+│   │
+│   └── features/
+│       └── feature_engineering.py
+│
 ├── data/
+│   ├── raw/
 │   ├── processed/
-│   ├── feedback/
+│   └── feedback/
+│
+├── experiments/             
 │   ├── metrics/
-│   └── experiments/
-│
-├── recommender/
-│   └── two_tower_model.py
-│
-├── serving/
-│   └── api.py
-│
-├── scripts/
-│   ├── generate_global_recs.py
-│   ├── ab_testing.py
-│   ├── feedback_metrics.py
-│   ├── ranking_optimization.py
-│   └── train_bpr.py
+│   └── logs/
 │
 ├── config/
 │   └── ranking_weights.csv
 │
-├── frontend/
-│   └── React dashboard
+├── frontend/               
+│   ├── src/
+│   ├── public/
+│   └── package.json
 │
-└── README.md
+├── notebooks/              
+│
+├── scripts/                
+│   ├── run_pipeline.py
+│   └── generate_global_recs.py
+│
+├── requirements.txt
+├── README.md
+└── .gitignore
 ```
 
 ---
 
 # 🚀 Getting Started
 
-## 🔧 Backend Setup
+## Backend
 
-```bash
-pip install -r requirements.txt
 ```
-
-Run API:
-
-```bash
+pip install -r requirements.txt
 uvicorn serving.api:app --reload
 ```
 
----
+## Frontend
 
-## 💻 Frontend Setup
-
-```bash
+```
 cd frontend
 npm install
 npm start
@@ -195,162 +157,47 @@ npm start
 
 ---
 
-# 📡 API Endpoints
+# 📡 API
 
-## 🔹 Get Recommendations
+## Get Recommendations
 
-```http
+```
 GET /recommend?user_id=123
 ```
 
-Response:
+## Log Feedback
 
-```json
-{
-  "group": "A",
-  "recommendations": [
-    {
-      "product_id": "22035",
-      "final_score": 0.93
-    }
-  ]
-}
 ```
-
----
-
-## 🔹 Log Feedback
-
-```http
 POST /feedback
 ```
 
-```json
-{
-  "user_id": 123,
-  "product_id": "22035",
-  "event": "click"
-}
-```
-
 ---
 
-# 🔄 Training & Optimization
+# 🔄 Training
 
-## Generate Recommendations
-
-```bash
+```
 python scripts/generate_global_recs.py
-```
-
----
-
-## Run A/B Testing
-
-```bash
-python scripts/ab_testing.py
-```
-
----
-
-## Compute Metrics
-
-```bash
 python scripts/feedback_metrics.py
-```
-
----
-
-## Learn Ranking Weights (Regression)
-
-```bash
 python scripts/ranking_optimization.py
-```
-
----
-
-## Train BPR Model (Advanced)
-
-```bash
 python scripts/train_bpr.py
 ```
 
 ---
 
-# 🧠 Key Concepts
+# 🧠 Key Idea
 
-## 🔹 Affinity Score
-
-* Learned from user behavior
-* Output of deep learning model
-
-## 🔹 Forecast Norm
-
-* Normalized demand signal
-* Computed using min-max scaling
-
-## 🔹 Final Score
-
-```text
-Final Score = affinity_weight * affinity_score
-            + forecast_weight * forecast_norm
+```
+Learn from user behavior → update ranking → improve recommendations
 ```
 
 ---
 
-# 📊 Metrics
+# ⭐ Summary
 
-| Metric          | Meaning                   |
-| --------------- | ------------------------- |
-| CTR             | Click-through rate        |
-| Conversion Rate | Purchases / Clicks        |
-| Engagement      | User-product interactions |
+A self-improving recommendation system that combines:
 
----
-
-# ⚡ Performance Highlights
-
-* ⚡ Real-time recommendation API
-* 🧠 Self-improving ranking system
-* 🔁 Continuous feedback loop
-* 📊 Data-driven optimization
-
----
-
-# 🚀 Future Improvements
-
-* 🔥 XGBoost / LightGBM ranking
-* 🧠 User-level personalization weights
-* 📊 Real-time streaming pipeline
-* 🏆 NDCG / MAP evaluation metrics
-
----
-
-# 👨‍💻 Tech Stack
-
-* **Backend:** Python, FastAPI
-* **ML:** PyTorch, Scikit-learn
-* **Frontend:** React
-* **Data:** Pandas, NumPy
-
----
-
-# 📌 Summary
-
-```text
-This project builds a complete intelligent retail system that:
-- Recommends products
-- Predicts demand
-- Learns from user behavior
-- Continuously improves ranking
-```
-
----
-
-# ⭐ Key Insight
-
-```text
-Personalization + Demand + Learning Loop = Smart Retail Intelligence
-```
+* Personalization
+* Demand awareness
+* Continuous learning
 
 ---
